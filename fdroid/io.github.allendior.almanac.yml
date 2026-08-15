@@ -61,7 +61,7 @@ Builds:
     # Replace with the real commit hash (or better, a signed/annotated git tag, e.g.
     # "v1.0") that HEAD points to once pushed. A local, unpushed hash is meaningless
     # to F-Droid's build server since it clones from Repo: above, not this machine.
-    commit: REPLACE_WITH_PUSHED_COMMIT_OR_TAG
+    commit: v1.0
     subdir: app
     gradle:
       - yes
