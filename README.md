@@ -7,6 +7,12 @@ changed.
 There is no account, no cloud, no subscription, no feed, and no company between you and
 your own face.
 
+## License
+
+Copyright © 2026 Allen. Licensed under the [GNU General Public License v3.0 or later](LICENSE)
+(SPDX: `GPL-3.0-or-later`). The full license text is in [`LICENSE`](LICENSE) at the root
+of this repository.
+
 ## What it is
 
 - **One portrait per local calendar day.** Replaceable while the day lasts; the replaced
@@ -111,6 +117,12 @@ Every third-party artefact in the shipped APK, and why it is there:
 No dependency in this list performs network I/O on the app's behalf, and the app could
 not reach the network if one tried.
 
+All AndroidX, Jetpack Compose, CameraX, Room, and Coil artefacts above are Apache
+License 2.0. Every dependency is pulled only from `google()` or `mavenCentral()` (see
+`settings.gradle.kts`) — no other Maven repository, and no proprietary or Google Play
+Services / Firebase / analytics / crash-reporting artefact is referenced anywhere in
+this project.
+
 ## Build and verify
 
 ```bash
@@ -190,4 +202,5 @@ or quietly ignored:
 (self-hosted backup) are not, and Phase 3 is a separate approval gate. The Archive
 screen's backup row says so plainly rather than showing a screen that pretends.
 
-See `docs/architecture.md` and `docs/threat-model.md`.
+See `docs/architecture.md` and `docs/threat-model.md`. For F-Droid submission status,
+see [`docs/fdroid-readiness.md`](docs/fdroid-readiness.md).

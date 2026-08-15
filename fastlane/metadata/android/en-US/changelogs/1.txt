@@ -1,0 +1,8 @@
+First release.
+
+* Daily portrait capture with an untouched, unaltered saved file
+* Calendar, timeline, entry detail, and two-date/by-year comparison views
+* Optional on-screen-only framing guide (ghost or grid)
+* Optional biometric app lock
+* Local ZIP export and validated, duplicate-safe import
+* Camera permission only — no internet, no location, no broad storage access

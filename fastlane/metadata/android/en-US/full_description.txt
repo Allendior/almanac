@@ -1,0 +1,29 @@
+Almanac is a private, offline-first record of one intentional self-portrait per day,
+meant to be looked back on years later.
+
+It has no accounts, no ads, no analytics, no cloud requirement, and no social
+features. It declares only the Camera permission — no internet access, no location,
+no broad storage access. Every photograph and every piece of metadata stays in the
+app's private storage on your device.
+
+Core ideas:
+
+* One portrait per local calendar day, taken with the in-app camera only. There is no
+  photo picker and no gallery import, so a portrait can be taken, never chosen from
+  elsewhere.
+* The saved photograph is never altered. No filters, no beautifying, no cropping. An
+  optional on-screen framing guide (a faint previous-portrait ghost, or a simple grid)
+  helps you line up the shot, but is never part of the saved file.
+* A missed day is never punished. There are no streaks, no completion percentages, and
+  no red marks on the calendar — only a quiet acknowledgement if it has been a while.
+* Browse your archive by calendar, by a scrolling timeline, or compare any two dates
+  side by side to see how much time has passed.
+* An optional biometric app lock, off by default.
+* Explicit export to a plain ZIP (your original photographs plus a readable JSON
+  index) via the system file picker, and matching import with full validation, a
+  visible report, and no risk of overwriting what is already in your archive.
+
+Optional self-hosted backup to your own home server is planned as a future,
+separately-approved feature. It will remain off by default, foreground-only, and will
+never be a requirement for the app to work — and it will never involve any third
+party's server.

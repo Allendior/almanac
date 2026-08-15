@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.almanac.portrait"
+    namespace = "io.github.allendior.almanac"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.almanac.portrait"
+        applicationId = "io.github.allendior.almanac"
         minSdk = 29
         targetSdk = 35
         versionCode = 1
