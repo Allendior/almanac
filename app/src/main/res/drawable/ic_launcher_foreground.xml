@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Almanac mark: a page with a folded corner — one entry, one day, kept in the
+  archive — holding a portrait and a caption rule. Drawn as stroke only, on the
+  Classical system's accent gold, matching the in-app rule that colour is a line,
+  never a fill. The head-and-shoulders mark echoes the same PortraitMark glyph used
+  in-app wherever a day has no photograph yet, so the icon and the app speak the
+  same visual language.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- The page, with a folded top-right corner (the almanac / archive of days). -->
+    <path
+        android:pathData="M30,24 L66,24 L78,36 L78,82 L30,82 Z"
+        android:strokeColor="#b68235"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M66,24 L66,36 L78,36"
+        android:strokeColor="#b68235"
+        android:strokeWidth="1.4"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- The portrait: a head and shoulders, held on the page. -->
+    <path
+        android:pathData="M54,50 m-6.5,0 a6.5,6.5 0 1,0 13,0 a6.5,6.5 0 1,0 -13,0"
+        android:strokeColor="#b68235"
+        android:strokeWidth="1.7"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M42,71 C44,61 49,58 54,58 C59,58 64,61 66,71"
+        android:strokeColor="#b68235"
+        android:strokeWidth="1.7"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
+    <!-- The caption rule beneath it: a day's one line of record. -->
+    <path
+        android:pathData="M42,76.5 L66,76.5"
+        android:strokeColor="#b68235"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+</vector>

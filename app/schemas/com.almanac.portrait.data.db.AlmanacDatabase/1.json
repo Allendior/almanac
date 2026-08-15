@@ -1,0 +1,82 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "b7fe69d55f4f32d4732b5193ea39db29",
+    "entities": [
+      {
+        "tableName": "portrait_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`day_id` TEXT NOT NULL, `captured_at_epoch_ms` INTEGER NOT NULL, `utc_offset_minutes` INTEGER NOT NULL, `file_name` TEXT NOT NULL, `sha256` TEXT NOT NULL, `mood` TEXT, `number_value` REAL, `camera_facing` TEXT NOT NULL, `note` TEXT, PRIMARY KEY(`day_id`))",
+        "fields": [
+          {
+            "fieldPath": "dayId",
+            "columnName": "day_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "capturedAtEpochMs",
+            "columnName": "captured_at_epoch_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "utcOffsetMinutes",
+            "columnName": "utc_offset_minutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileName",
+            "columnName": "file_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sha256",
+            "columnName": "sha256",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mood",
+            "columnName": "mood",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "numberValue",
+            "columnName": "number_value",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "cameraFacing",
+            "columnName": "camera_facing",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "day_id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b7fe69d55f4f32d4732b5193ea39db29')"
+    ]
+  }
+}

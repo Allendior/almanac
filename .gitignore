@@ -1,0 +1,23 @@
+# Android / Gradle
+*.iml
+.gradle/
+local.properties
+.idea/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Tooling artifacts, not project source
+.kotlin/
+.claude-flow/
+
+# Never commit real portraits, archives, or secrets
+*.zip
+/screenshots/*.png
+!/screenshots/.gitkeep
+secrets.properties
