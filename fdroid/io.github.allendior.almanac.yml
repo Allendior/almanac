@@ -1,75 +1,34 @@
-# F-Droid build metadata — DRAFT / REFERENCE ONLY.
-#
-# This file is written in the format F-Droid's build tooling expects, but it does not
-# do anything by sitting in this repository. Depending on which path you take, it goes
-# to one of two places instead:
-#
-#   Path A — submit to the official main F-Droid repo:
-#     1. Push this repository to a public host (GitHub, GitLab, Codeberg — anywhere
-#        public and reachable over plain git).
-#     2. Fork https://gitlab.com/fdroid/fdroiddata
-#     3. Copy this file to metadata/io.github.allendior.almanac.yml in that fork,
-#        filling in the Repo: URL and a real commit/tag below.
-#     4. Open a merge request. A volunteer reviewer builds it, checks it against the
-#        Inclusion Policy, and merges (or asks for changes) — this can take days to
-#        weeks and is entirely F-Droid's own process, not something scriptable here.
-#
-#   Path B — self-host your own F-Droid-compatible repo:
-#     Install `fdroidserver` (`pip install fdroidserver` or the Debian package), run
-#     `fdroid init`, drop a copy of this file into that repo's own metadata/ directory,
-#     then `fdroid build` / `fdroid update`. You sign it with your own key and users
-#     add your repo URL to their F-Droid client manually. No review queue, but also no
-#     main-repo discoverability.
-#
-# Either way, the fields below are the actual content — verified against this specific
-# codebase, not generic boilerplate.
-
 Categories:
-  - Photography
+  - Camera
+  - Gallery
 License: GPL-3.0-or-later
 AuthorName: Allen
 SourceCode: https://github.com/Allendior/almanac
 IssueTracker: https://github.com/Allendior/almanac/issues
-Changelog: https://github.com/Allendior/almanac/blob/main/fastlane/metadata/android/en-US/changelogs/1.txt
+Changelog: 
+  https://github.com/Allendior/almanac/blob/main/fastlane/metadata/android/en-US/changelogs/2.txt
 
 AutoName: Almanac
-Summary: A private, offline self-portrait archive
-Description: |-
-  Almanac is a private, offline-first record of one intentional self-portrait per day,
-  meant to be looked back on years later.
 
-  It has no accounts, no ads, no analytics, no cloud requirement, and no social
-  features. It declares only the Camera permission — no internet access, no location,
-  no broad storage access. Every photograph and every piece of metadata stays in the
-  app's private storage on the device.
-
-  * One portrait per local calendar day, taken with the in-app camera only.
-  * The saved photograph is never altered — no filters, no beautifying, no cropping.
-  * A missed day is never punished. No streaks, no completion percentages.
-  * Calendar, timeline, and two-date/by-year comparison views.
-  * Optional biometric app lock, off by default.
-  * Explicit ZIP export and validated, duplicate-safe import via the system file picker.
-
-# RepoType/Repo must point at wherever this project is actually hosted publicly.
-# Fill this in once pushed — it cannot be a local path.
 RepoType: git
 Repo: https://github.com/Allendior/almanac.git
 
 Builds:
   - versionName: '1.0'
     versionCode: 1
-    # Replace with the real commit hash (or better, a signed/annotated git tag, e.g.
-    # "v1.0") that HEAD points to once pushed. A local, unpushed hash is meaningless
-    # to F-Droid's build server since it clones from Repo: above, not this machine.
-    commit: v1.0
+    commit: 88a68ced464b6220e7cccd4b9e1a3445c7fdf590
     subdir: app
     gradle:
       - yes
-    # AGP/Gradle/JDK versions actually used and verified in this project, in case the
-    # build server's defaults ever drift from what this repo was tested against:
-    #   AGP 8.6.0, Gradle 8.7 (wrapper committed), compileSdk 35, minSdk 29.
+
+  - versionName: '1.1'
+    versionCode: 2
+    commit: 40a0de2e0bb05465180d72ea651b5b59637ec219
+    subdir: app
+    gradle:
+      - yes
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: '1.0'
-CurrentVersionCode: 1
+CurrentVersion: '1.1'
+CurrentVersionCode: 2
