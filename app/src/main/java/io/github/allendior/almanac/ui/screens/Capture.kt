@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -51,6 +53,7 @@ import io.github.allendior.almanac.domain.CameraFacing
 import io.github.allendior.almanac.ui.Fmt
 import io.github.allendior.almanac.ui.components.ButtonTone
 import io.github.allendior.almanac.ui.components.ClassicalButton
+import io.github.allendior.almanac.ui.components.Lucide
 import io.github.allendior.almanac.ui.components.SelectChip
 import io.github.allendior.almanac.ui.components.accessibleClick
 import io.github.allendior.almanac.ui.theme.Ink
@@ -85,6 +88,9 @@ fun CaptureScreen(
     }
     var facing by remember { mutableStateOf(CameraFacing.FRONT) }
     var capturing by remember { mutableStateOf(false) }
+    var camera by remember { mutableStateOf<Camera?>(null) }
+    var torchOn by remember { mutableStateOf(false) }
+    val hasFlash = camera?.cameraInfo?.hasFlashUnit() == true
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -93,6 +99,11 @@ fun CaptureScreen(
     LaunchedEffect(Unit) {
         if (!granted) permissionLauncher.launch(Manifest.permission.CAMERA)
     }
+
+    // Every facing switch rebinds a fresh camera, which always starts torch-off — follow
+    // that here so the toggle can't show "on" for a camera that just lost the light.
+    LaunchedEffect(facing) { torchOn = false }
+    LaunchedEffect(torchOn, camera) { camera?.cameraControl?.enableTorch(torchOn) }
 
     Column(
         Modifier
@@ -136,6 +147,7 @@ fun CaptureScreen(
                 CameraPreview(
                     facing = facing,
                     onImageCaptureReady = { capture -> imageCapture = capture },
+                    onCameraReady = { camera = it },
                 )
             } else {
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)), Alignment.Center) {
@@ -195,8 +207,30 @@ fun CaptureScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Deliberately empty: there is no import affordance on this screen.
-            Box(Modifier.size(56.dp))
+            Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                // Front cameras almost never carry a flash unit — the slot stays empty
+                // rather than showing a button that could never do anything.
+                if (hasFlash) {
+                    Box(
+                        Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .border(1.dp, Ink.darkText.copy(alpha = if (torchOn) 0.55f else 0.2f), CircleShape)
+                            .accessibleClick(
+                                onClick = { torchOn = !torchOn },
+                                label = if (torchOn) "Turn off flashlight" else "Turn on flashlight",
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Lucide.Zap,
+                            contentDescription = null,
+                            tint = if (torchOn) Ink.guideGold else Ink.darkText.copy(alpha = 0.7f),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
 
             Shutter(
                 enabled = granted && !capturing,
@@ -244,7 +278,11 @@ fun CaptureScreen(
 private var imageCapture: ImageCapture? = null
 
 @Composable
-private fun CameraPreview(facing: CameraFacing, onImageCaptureReady: (ImageCapture) -> Unit) {
+private fun CameraPreview(
+    facing: CameraFacing,
+    onImageCaptureReady: (ImageCapture) -> Unit,
+    onCameraReady: (Camera?) -> Unit,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER } }
@@ -268,9 +306,10 @@ private fun CameraPreview(facing: CameraFacing, onImageCaptureReady: (ImageCaptu
             }
             runCatching {
                 provider.unbindAll()
-                provider.bindToLifecycle(lifecycleOwner, selector, preview, capture)
+                val boundCamera = provider.bindToLifecycle(lifecycleOwner, selector, preview, capture)
                 imageCapture = capture
                 onImageCaptureReady(capture)
+                onCameraReady(boundCamera)
             }
         }
         providerFuture.addListener(listener, ContextCompat.getMainExecutor(context))
@@ -278,6 +317,7 @@ private fun CameraPreview(facing: CameraFacing, onImageCaptureReady: (ImageCaptu
         onDispose {
             runCatching { bound?.unbindAll() }
             imageCapture = null
+            onCameraReady(null)
         }
     }
 

@@ -5,10 +5,13 @@
     <!--
       Declared permissions, in full:
 
-        CAMERA         - the one thing this app does.
-        USE_BIOMETRIC  - merged in by androidx.biometric, used only for the optional
-                         app lock. It cannot read anything; it asks the OS to confirm
-                         it is you, and the OS answers yes or no.
+        CAMERA               - the one thing this app does.
+        USE_BIOMETRIC        - merged in by androidx.biometric, used only for the
+                                optional app lock. It cannot read anything; it asks the
+                                OS to confirm it is you, and the OS answers yes or no.
+        POST_NOTIFICATIONS   - the optional daily reminder, on by default. Asked once;
+                                if refused, the reminder is silently never shown again
+                                until switched on in Archive, which asks again.
 
       There is deliberately no INTERNET, no location, no external storage, and no
       package-visibility query. Verified against the packaged APK, not against this
@@ -20,6 +23,22 @@
     -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      WorkManager's own manifest merges in four permissions this app does not need and
+      does not want to carry: WAKE_LOCK and RECEIVE_BOOT_COMPLETED exist for its pre-API-23
+      AlarmManager fallback (minSdk here is 29, so JobScheduler is always used, and
+      JobScheduler persists scheduled work across reboots without a boot receiver);
+      FOREGROUND_SERVICE is for expedited/foreground work, which the reminder never
+      requests; ACCESS_NETWORK_STATE is for network-type work constraints, and the
+      reminder sets none. All four are removed so the declared set stays exactly what
+      the app uses.
+    -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" tools:node="remove" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
 
     <uses-feature android:name="android.hardware.camera.any" android:required="true" />
 
@@ -33,6 +52,22 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Almanac">
+
+        <!--
+          WorkManager's default startup initializer is removed: AlmanacApp implements
+          Configuration.Provider directly, and the default initializer would build
+          workers with a bare no-arg constructor, which ReminderWorker does not have.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
 
         <activity
             android:name=".MainActivity"

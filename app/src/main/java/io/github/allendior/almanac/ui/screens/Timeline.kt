@@ -114,7 +114,7 @@ fun TimelineScreen(
                     ) {
                         row.entries.forEach { entry ->
                             Box(Modifier.weight(1f)) {
-                                DayThumbnail(entry, thumbnailOf(entry), onOpenEntry)
+                                DayThumbnail(entry, thumbnailOf(entry)) { onOpenEntry(entry.id) }
                             }
                         }
                         repeat(3 - row.entries.size) { Box(Modifier.weight(1f)) }

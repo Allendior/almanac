@@ -1,5 +1,7 @@
 package io.github.allendior.almanac.domain
 
+import java.util.UUID
+
 /**
  * The rules an imported row must satisfy before it is allowed into the archive.
  *
@@ -12,13 +14,23 @@ object EntryValidation {
     const val MAX_NOTE_LENGTH = 500
     private val SHA256 = Regex("^[0-9a-f]{64}$")
     private val SAFE_FILE_NAME = Regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9a-f]{6,32}\\.jpg$")
+    private val UUID_PATTERN =
+        Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
     sealed interface Result {
         data class Valid(val entry: PortraitEntry) : Result
         data class Rejected(val dayId: String?, val reason: String) : Result
     }
 
+    /**
+     * [id] may be absent — an entry is identified by [dayId] plus content in every
+     * format this app has ever exported before entries gained their own id, so a
+     * missing id is filled in rather than treated as a reason to reject the row. A
+     * present-but-malformed id is different: that suggests corruption, not an older
+     * export, and is rejected.
+     */
     fun validate(
+        id: String?,
         dayId: String?,
         capturedAtEpochMs: Long?,
         utcOffsetMinutes: Int?,
@@ -31,6 +43,9 @@ object EntryValidation {
     ): Result {
         if (dayId.isNullOrBlank() || !DayId.isValid(dayId)) {
             return Result.Rejected(dayId, "not a valid calendar day")
+        }
+        if (id != null && id.isNotBlank() && !UUID_PATTERN.matches(id.lowercase())) {
+            return Result.Rejected(dayId, "malformed entry id")
         }
         if (capturedAtEpochMs == null || capturedAtEpochMs <= 0) {
             return Result.Rejected(dayId, "missing capture time")
@@ -53,6 +68,7 @@ object EntryValidation {
         }
         return Result.Valid(
             PortraitEntry(
+                id = id?.takeIf { it.isNotBlank() }?.lowercase() ?: UUID.randomUUID().toString(),
                 dayId = dayId,
                 capturedAtEpochMs = capturedAtEpochMs,
                 utcOffsetMinutes = utcOffsetMinutes,

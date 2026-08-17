@@ -5,14 +5,17 @@ import io.github.allendior.almanac.domain.EntryValidation
 import io.github.allendior.almanac.domain.Mood
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EntryValidationTest {
 
     private val hash = "a".repeat(64)
+    private val uuid = "3f7ac91b-2d4e-4a11-9c3a-8e0f1a2b3c4d"
 
     private fun validate(
+        id: String? = uuid,
         dayId: String? = "2026-08-14",
         capturedAt: Long? = 1786757400000L,
         offset: Int? = 330,
@@ -22,15 +25,35 @@ class EntryValidationTest {
         number: Double? = 72.4,
         facing: String? = "FRONT",
         note: String? = "A line to my later self",
-    ) = EntryValidation.validate(dayId, capturedAt, offset, fileName, sha, mood, number, facing, note)
+    ) = EntryValidation.validate(id, dayId, capturedAt, offset, fileName, sha, mood, number, facing, note)
 
     @Test
     fun `a well-formed row is accepted whole`() {
         val result = validate() as EntryValidation.Result.Valid
+        assertEquals(uuid, result.entry.id)
         assertEquals("2026-08-14", result.entry.dayId)
         assertEquals(Mood.BRIGHT, result.entry.mood)
         assertEquals(CameraFacing.FRONT, result.entry.cameraFacing)
         assertEquals(72.4, result.entry.numberValue!!, 0.0001)
+    }
+
+    @Test
+    fun `a missing id is generated rather than rejected`() {
+        val result = validate(id = null) as EntryValidation.Result.Valid
+        assertTrue(result.entry.id.isNotBlank())
+    }
+
+    @Test
+    fun `two rows with no id each get a distinct generated id`() {
+        val a = (validate(id = null) as EntryValidation.Result.Valid).entry.id
+        val b = (validate(id = null) as EntryValidation.Result.Valid).entry.id
+        assertNotEquals(a, b)
+    }
+
+    @Test
+    fun `a malformed id is rejected, unlike a missing one`() {
+        assertTrue(validate(id = "not-a-uuid") is EntryValidation.Result.Rejected)
+        assertTrue(validate(id = "") is EntryValidation.Result.Valid) // blank treated as absent
     }
 
     @Test

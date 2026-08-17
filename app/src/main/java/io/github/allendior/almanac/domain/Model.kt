@@ -6,13 +6,16 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 
 /**
- * One portrait, one local calendar day.
+ * One portrait.
  *
- * [dayId] is the ISO local date at the moment of capture and is the primary key. It is
- * decided once, on the device, at capture time, and is never recomputed — so travelling
- * across timezones can never move an existing entry to a different day.
+ * [id] is a UUID, decided once at capture and never recomputed — it is the entry's true
+ * identity, and what export/import and delete/edit operate on. [dayId] is the ISO local
+ * date at the moment of capture — also decided once and never recomputed, so travelling
+ * across timezones can never move an existing entry to a different day — but it is no
+ * longer unique: a day may hold more than one entry.
  */
 data class PortraitEntry(
+    val id: String,
     val dayId: String,
     val capturedAtEpochMs: Long,
     val utcOffsetMinutes: Int,

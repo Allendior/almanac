@@ -90,7 +90,7 @@ fun EntryScreen(
         }
 
         if (noteEditorOpen) {
-            var draft by remember(entry.dayId) { mutableStateOf(TextFieldValue(entry.note.orEmpty())) }
+            var draft by remember(entry.id) { mutableStateOf(TextFieldValue(entry.note.orEmpty())) }
             ClassicalField(
                 label = "A line to your later self",
                 value = draft,
@@ -103,7 +103,7 @@ fun EntryScreen(
                 ClassicalButton("Cancel", { onNoteEditorOpen(false) }, Modifier.weight(1f))
                 ClassicalButton(
                     "Save note",
-                    { onSaveNote(entry.dayId, draft.text) },
+                    { onSaveNote(entry.id, draft.text) },
                     Modifier.weight(1f),
                     tone = ButtonTone.Primary,
                 )

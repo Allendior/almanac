@@ -26,7 +26,12 @@ sealed interface Overlay {
     data object Review : Overlay
     data object Lock : Overlay
     data object Welcome : Overlay
-    data class Entry(val dayId: String) : Overlay
+    data object Introduction : Overlay
+    data object Tips : Overlay
+    data class Entry(val entryId: String) : Overlay
+
+    /** A day with more than one portrait: pick which one to open. */
+    data class DayEntries(val dayId: String) : Overlay
 }
 
 /** A portrait that has been taken but not yet saved. It lives only in memory. */
@@ -66,8 +71,8 @@ enum class CompareTab { TWO_DATES, BY_YEAR }
 
 data class CompareState(
     val tab: CompareTab = CompareTab.TWO_DATES,
-    val leftDayId: String? = null,
-    val rightDayId: String? = null,
+    val leftEntryId: String? = null,
+    val rightEntryId: String? = null,
     /** Which plate's date picker is open, if any. */
     val picking: ComparePane? = null,
 )
@@ -92,13 +97,19 @@ data class AlmanacUiState(
 ) {
     val todayId: String get() = today.toString()
 
-    val todayEntry: PortraitEntry? get() = entries.firstOrNull { it.dayId == todayId }
+    /** All of today's entries, most recent first. A day may hold more than one. */
+    val todayEntries: List<PortraitEntry> get() = entries.filter { it.dayId == todayId }
 
-    /** Entries are held newest-first, so the first is the most recent day recorded. */
+    /** The one to show prominently on Today — the most recently taken. */
+    val todayLatest: PortraitEntry? get() = todayEntries.firstOrNull()
+
+    /** Entries are held newest-first by capture time, so the first is the most recent. */
     val mostRecent: PortraitEntry? get() = entries.firstOrNull()
 
     val oldest: PortraitEntry? get() = entries.lastOrNull()
 
-    fun entry(dayId: String?): PortraitEntry? =
-        dayId?.let { id -> entries.firstOrNull { it.dayId == id } }
+    fun entriesForDay(dayId: String): List<PortraitEntry> = entries.filter { it.dayId == dayId }
+
+    fun entry(id: String?): PortraitEntry? =
+        id?.let { target -> entries.firstOrNull { it.id == target } }
 }

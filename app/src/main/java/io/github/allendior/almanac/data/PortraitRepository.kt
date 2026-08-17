@@ -9,6 +9,7 @@ import io.github.allendior.almanac.domain.PortraitEntry
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.io.File
+import java.util.UUID
 
 /**
  * The single boundary between the archive and everything above it. Screens never
@@ -20,24 +21,28 @@ class PortraitRepository(
     private val photos: PhotoStore,
 ) {
 
+    /** Newest capture first, across the whole archive. */
     val entries: Flow<List<PortraitEntry>> = dao.observeAll().map { rows ->
         rows.map { it.toDomain() }
     }
 
     suspend fun entriesNow(): List<PortraitEntry> = dao.getAll().map { it.toDomain() }
 
-    suspend fun find(dayId: String): PortraitEntry? = dao.findByDay(dayId)?.toDomain()
+    suspend fun find(id: String): PortraitEntry? = dao.findById(id)?.toDomain()
+
+    /** All of a day's entries, newest first — a day may hold more than one. */
+    suspend fun findAllByDay(dayId: String): List<PortraitEntry> =
+        dao.findAllByDay(dayId).map { it.toDomain() }
 
     fun originalFile(entry: PortraitEntry): File = photos.originalFile(entry.fileName)
 
-    fun thumbnailFile(entry: PortraitEntry): File = photos.thumbnailFile(entry.dayId)
+    fun thumbnailFile(entry: PortraitEntry): File = photos.thumbnailFile(entry.id)
 
     /**
-     * Saves today's portrait, replacing an existing one for the same day.
-     *
-     * Order matters: the new file is written and committed to the database before the
-     * superseded file is removed, so a crash mid-save can leave an orphan file but can
-     * never leave a row pointing at nothing.
+     * Saves a new portrait. Always an addition, never a replacement — a day may hold
+     * more than one entry, so there is nothing to supersede here. The file is written
+     * and committed to the database in that order, so a crash mid-save can leave an
+     * orphan file but can never leave a row pointing at nothing.
      */
     suspend fun save(
         dayId: String,
@@ -49,9 +54,10 @@ class PortraitRepository(
         cameraFacing: CameraFacing,
         note: String?,
     ): PortraitEntry {
-        val previous = dao.findByDay(dayId)
-        val stored = photos.writeOriginal(dayId, bytes)
+        val id = UUID.randomUUID().toString()
+        val stored = photos.writeOriginal(dayId, id, bytes)
         val entry = PortraitEntry(
+            id = id,
             dayId = dayId,
             capturedAtEpochMs = capturedAtEpochMs,
             utcOffsetMinutes = utcOffsetMinutes,
@@ -62,22 +68,18 @@ class PortraitRepository(
             cameraFacing = cameraFacing,
             note = note?.takeIf { it.isNotBlank() },
         )
-        dao.upsert(PortraitEntryEntity.fromDomain(entry))
-        if (previous != null && previous.fileName != stored.fileName) {
-            photos.delete(previous.fileName, dayId)
-            photos.generateThumbnail(photos.originalFile(stored.fileName), dayId)
-        }
+        dao.insert(PortraitEntryEntity.fromDomain(entry))
         return entry
     }
 
-    suspend fun updateNote(dayId: String, note: String?) {
-        dao.updateNote(dayId, note?.takeIf { it.isNotBlank() })
+    suspend fun updateNote(id: String, note: String?) {
+        dao.updateNote(id, note?.takeIf { it.isNotBlank() })
     }
 
     /** Deleting is deliberate and complete: the row and the file both go. */
     suspend fun delete(entry: PortraitEntry) {
-        dao.delete(entry.dayId)
-        photos.delete(entry.fileName, entry.dayId)
+        dao.delete(entry.id)
+        photos.delete(entry.fileName, entry.id)
     }
 
     suspend fun count(): Int = dao.count()
@@ -89,7 +91,7 @@ class PortraitRepository(
         entriesNow().filter { !photos.originalFile(it.fileName).exists() }
 
     suspend fun repairThumbnails() {
-        photos.regenerateMissingThumbnails(entriesNow().map { it.dayId to it.fileName })
+        photos.regenerateMissingThumbnails(entriesNow().map { it.id to it.fileName })
     }
 
     fun todayId(): String = DayId.today()

@@ -16,15 +16,16 @@ import org.json.JSONObject
 object ArchiveFormat {
 
     const val FORMAT = "almanac-archive"
-    const val VERSION = 1
+    const val VERSION = 2
     const val INDEX_NAME = "index.json"
     const val ORIGINALS_PREFIX = "originals/"
 
     fun writeIndex(entries: List<PortraitEntry>, exportedAtEpochMs: Long, offsetMinutes: Int): String {
         val array = JSONArray()
-        entries.sortedBy { it.dayId }.forEach { entry ->
+        entries.sortedWith(compareBy({ it.dayId }, { it.capturedAtEpochMs })).forEach { entry ->
             array.put(
                 JSONObject().apply {
+                    put("id", entry.id)
                     put("dayId", entry.dayId)
                     put("capturedAtEpochMs", entry.capturedAtEpochMs)
                     put("utcOffsetMinutes", entry.utcOffsetMinutes)
@@ -71,6 +72,7 @@ object ArchiveFormat {
             val o = array.optJSONObject(i)
                 ?: return@map EntryValidation.Result.Rejected(null, "row is not an object")
             EntryValidation.validate(
+                id = o.optStringOrNull("id"),
                 dayId = o.optStringOrNull("dayId"),
                 capturedAtEpochMs = if (o.has("capturedAtEpochMs")) o.optLong("capturedAtEpochMs") else null,
                 utcOffsetMinutes = if (o.has("utcOffsetMinutes")) o.optInt("utcOffsetMinutes", 9999) else null,

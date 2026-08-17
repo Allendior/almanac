@@ -19,7 +19,11 @@ import java.security.MessageDigest
  *   thumbnails/ a small derived JPEG, disposable and regenerable, never the record.
  *
  * If a thumbnail is lost or corrupt the archive is intact; if an original is lost,
- * that day is gone. The code treats the two accordingly.
+ * that entry is gone. The code treats the two accordingly.
+ *
+ * Both originals and thumbnails are named from the entry's id (a UUID), not the day —
+ * a day can hold more than one entry, so day alone was never a safe filename basis for
+ * the thumbnail.
  */
 class PhotoStore(context: Context) {
 
@@ -32,7 +36,7 @@ class PhotoStore(context: Context) {
 
     fun originalFile(fileName: String) = File(originalsDir, fileName)
 
-    fun thumbnailFile(dayId: String) = File(thumbnailsDir, "$dayId.jpg")
+    fun thumbnailFile(entryId: String) = File(thumbnailsDir, "$entryId.jpg")
 
     /**
      * Names are built from the day and a prefix of the content hash only.
@@ -44,27 +48,28 @@ class PhotoStore(context: Context) {
      * Writes the camera's bytes verbatim: no decode, no re-encode, no rotation baked
      * in, no filter. What the sensor produced is what lands on disk.
      */
-    suspend fun writeOriginal(dayId: String, bytes: ByteArray): StoredPhoto = withContext(Dispatchers.IO) {
-        if (originalsDir.usableSpace <= bytes.size + MIN_FREE_BYTES) {
-            throw StorageFullException()
+    suspend fun writeOriginal(dayId: String, entryId: String, bytes: ByteArray): StoredPhoto =
+        withContext(Dispatchers.IO) {
+            if (originalsDir.usableSpace <= bytes.size + MIN_FREE_BYTES) {
+                throw StorageFullException()
+            }
+            val sha = sha256(bytes)
+            val name = fileNameFor(dayId, sha)
+            val target = File(originalsDir, name)
+            val temp = File(originalsDir, "$name.part")
+            try {
+                temp.writeBytes(bytes)
+                if (!temp.renameTo(target)) throw IOException("Could not commit $name")
+            } finally {
+                if (temp.exists()) temp.delete()
+            }
+            runCatching { generateThumbnail(target, entryId) }
+            StoredPhoto(fileName = name, sha256 = sha, sizeBytes = bytes.size.toLong())
         }
-        val sha = sha256(bytes)
-        val name = fileNameFor(dayId, sha)
-        val target = File(originalsDir, name)
-        val temp = File(originalsDir, "$name.part")
-        try {
-            temp.writeBytes(bytes)
-            if (!temp.renameTo(target)) throw IOException("Could not commit $name")
-        } finally {
-            if (temp.exists()) temp.delete()
-        }
-        runCatching { generateThumbnail(target, dayId) }
-        StoredPhoto(fileName = name, sha256 = sha, sizeBytes = bytes.size.toLong())
-    }
 
-    suspend fun delete(fileName: String, dayId: String) = withContext(Dispatchers.IO) {
+    suspend fun delete(fileName: String, entryId: String) = withContext(Dispatchers.IO) {
         File(originalsDir, fileName).delete()
-        thumbnailFile(dayId).delete()
+        thumbnailFile(entryId).delete()
         Unit
     }
 
@@ -93,7 +98,7 @@ class PhotoStore(context: Context) {
      * The derived thumbnail. Orientation IS applied here, because a thumbnail exists
      * only to be looked at; the original keeps its EXIF and its untouched pixels.
      */
-    suspend fun generateThumbnail(original: File, dayId: String): File? = withContext(Dispatchers.IO) {
+    suspend fun generateThumbnail(original: File, entryId: String): File? = withContext(Dispatchers.IO) {
         if (!original.exists()) return@withContext null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(original.absolutePath, bounds)
@@ -109,7 +114,7 @@ class PhotoStore(context: Context) {
         ) ?: return@withContext null
 
         val rotated = applyExifOrientation(decoded, original)
-        val out = thumbnailFile(dayId)
+        val out = thumbnailFile(entryId)
         val temp = File(out.parentFile, "${out.name}.part")
         temp.outputStream().use { rotated.compress(Bitmap.CompressFormat.JPEG, 82, it) }
         if (rotated !== decoded) rotated.recycle()
@@ -123,9 +128,9 @@ class PhotoStore(context: Context) {
 
     /** Rebuilds any thumbnail that is missing — cheap self-healing on startup. */
     suspend fun regenerateMissingThumbnails(entries: List<Pair<String, String>>) = withContext(Dispatchers.IO) {
-        entries.forEach { (dayId, fileName) ->
-            if (!thumbnailFile(dayId).exists()) {
-                runCatching { generateThumbnail(File(originalsDir, fileName), dayId) }
+        entries.forEach { (entryId, fileName) ->
+            if (!thumbnailFile(entryId).exists()) {
+                runCatching { generateThumbnail(File(originalsDir, fileName), entryId) }
             }
         }
     }

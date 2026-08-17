@@ -96,12 +96,31 @@ Mitigated: every field is validated rather than trusted. File names must match t
 shape this app writes — no `..`, no separators, no dotfiles — because the name is used
 to open a file inside app-private storage. Hashes must match. Impossible UTC offsets,
 non-finite numbers, malformed dates, and overlong notes are rejected with a stated
-reason. Existing days are never overwritten. Twelve unit tests cover this specifically,
-including path traversal.
+reason. Existing entries (by id) are never overwritten. Twelve unit tests cover this
+specifically, including path traversal.
 
 Not mitigated: a malformed JPEG that is well-formed enough to pass the hash check is
 written to disk and handed to the platform decoder. The decoder is the OS's, not the
 app's.
+
+### 9. The daily reminder notification
+
+**A small, new surface, and worth being explicit about.**
+
+Mitigated: the notification body is fixed, neutral text ("One portrait, whenever suits
+you today.") — never a name, a note, a streak count, or anything else that identifies
+what the archive contains or how long it has been kept. The worker checks settings,
+today's entries, and the notification permission before doing anything, and does
+nothing silently if any of those says not to. There is no catch-up notification for a
+day the reminder missed.
+
+Not mitigated: a notification on the lock screen reveals that Almanac is installed and
+roughly what time of day you tend to use it, to anyone who can see that lock screen —
+the same category of exposure as any other app's lock-screen notification, not a new
+kind of risk, but a real one if the *fact of using this app* is itself sensitive to you.
+Turning the reminder off in Archive removes it entirely; the Android system notification
+settings for the app also let you hide its content from the lock screen specifically
+without disabling it in-app.
 
 ## Explicitly out of scope
 

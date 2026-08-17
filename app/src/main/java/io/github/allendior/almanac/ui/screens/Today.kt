@@ -48,11 +48,13 @@ fun TodayScreen(
     originalOf: (PortraitEntry) -> File,
     onCapture: () -> Unit,
     onOpenEntry: (String) -> Unit,
+    onOpenDay: (String) -> Unit,
     onNoteEditorOpen: (Boolean) -> Unit,
     onSaveNote: (String, String) -> Unit,
 ) {
-    val today = state.todayEntry
-    val recorded = today != null
+    val todayEntries = state.todayEntries
+    val latest = todayEntries.firstOrNull()
+    val recorded = latest != null
 
     ScreenColumn {
         Row(
@@ -64,7 +66,7 @@ fun TodayScreen(
             // Nothing is claimed about the archive until it has actually been read.
             if (!state.loading) {
                 Text(
-                    Fmt.days(state.entries.size),
+                    Fmt.days(state.entries.map { it.dayId }.distinct().size),
                     style = Type.figures(11f),
                     color = Ink.textMuted,
                 )
@@ -81,7 +83,7 @@ fun TodayScreen(
             )
         }
 
-        if (today == null) {
+        if (latest == null) {
             EmptyFrame(
                 label = "Not recorded yet",
                 modifier = Modifier
@@ -106,14 +108,16 @@ fun TodayScreen(
             }
         } else {
             RecordedToday(
-                entry = today,
+                entry = latest,
+                others = todayEntries.drop(1),
                 originalOf = originalOf,
                 thumbnailOf = thumbnailOf,
                 numberLabel = state.settings.numberLabel,
                 noteEditorOpen = state.noteEditorOpen,
                 onNoteEditorOpen = onNoteEditorOpen,
                 onSaveNote = onSaveNote,
-                onRetake = onCapture,
+                onAddAnother = onCapture,
+                onOpenEntry = onOpenEntry,
             )
         }
 
@@ -121,7 +125,10 @@ fun TodayScreen(
         Hairline()
         Kicker("Nearby days")
 
-        val nearby = state.entries.filter { it.dayId != state.todayId }.take(4)
+        val nearby = state.entries
+            .filter { it.dayId != state.todayId }
+            .distinctBy { it.dayId }
+            .take(4)
         if (state.loading) {
             Box(Modifier.height(Space.s2))
         } else if (nearby.isEmpty()) {
@@ -135,7 +142,7 @@ fun TodayScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
                 nearby.forEach { entry ->
                     Box(Modifier.weight(1f)) {
-                        DayThumbnail(entry, thumbnailOf(entry), onOpenEntry)
+                        DayThumbnail(entry, thumbnailOf(entry)) { onOpenDay(entry.dayId) }
                     }
                 }
                 repeat(4 - nearby.size) { Box(Modifier.weight(1f)) }
@@ -147,13 +154,15 @@ fun TodayScreen(
 @Composable
 private fun RecordedToday(
     entry: PortraitEntry,
+    others: List<PortraitEntry>,
     originalOf: (PortraitEntry) -> File,
     thumbnailOf: (PortraitEntry) -> File,
     numberLabel: String,
     noteEditorOpen: Boolean,
     onNoteEditorOpen: (Boolean) -> Unit,
     onSaveNote: (String, String) -> Unit,
-    onRetake: () -> Unit,
+    onAddAnother: () -> Unit,
+    onOpenEntry: (String) -> Unit,
 ) {
     Plate(Modifier.fillMaxWidth()) {
         PortraitImage(
@@ -195,14 +204,16 @@ private fun RecordedToday(
             modifier = Modifier.weight(1f),
         )
         ClassicalButton(
-            label = "Retake",
-            onClick = onRetake,
+            // Always additive — a day can hold more than one portrait, so there is
+            // nothing here to replace.
+            label = "Add another portrait",
+            onClick = onAddAnother,
             modifier = Modifier.weight(1f),
         )
     }
 
     if (noteEditorOpen) {
-        var draft by remember(entry.dayId) { mutableStateOf(TextFieldValue(entry.note.orEmpty())) }
+        var draft by remember(entry.id) { mutableStateOf(TextFieldValue(entry.note.orEmpty())) }
         Box(Modifier.height(Space.s3))
         io.github.allendior.almanac.ui.components.ClassicalField(
             label = "A line to your later self",
@@ -218,7 +229,7 @@ private fun RecordedToday(
             ClassicalButton("Cancel", { onNoteEditorOpen(false) }, Modifier.weight(1f))
             ClassicalButton(
                 "Save note",
-                { onSaveNote(entry.dayId, draft.text) },
+                { onSaveNote(entry.id, draft.text) },
                 Modifier.weight(1f),
                 tone = ButtonTone.Primary,
             )
@@ -227,22 +238,40 @@ private fun RecordedToday(
         Box(Modifier.height(Space.s2))
         Text(entry.note, style = Type.noteItalic, color = Ink.text.copy(alpha = 0.75f))
     }
+
+    if (others.isNotEmpty()) {
+        Box(Modifier.height(Space.s3))
+        Kicker("Also today")
+        Box(Modifier.height(Space.s2))
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
+            others.take(4).forEach { other ->
+                Box(Modifier.weight(1f)) {
+                    DayThumbnail(
+                        other,
+                        thumbnailOf(other),
+                        label = Fmt.clock(other),
+                    ) { onOpenEntry(other.id) }
+                }
+            }
+            repeat((4 - others.size).coerceAtLeast(0)) { Box(Modifier.weight(1f)) }
+        }
+    }
 }
 
-/** A square thumbnail with its day numeral set over the image, bottom-left. */
+/** A square thumbnail with a small caption set over the image, bottom-left. */
 @Composable
 fun DayThumbnail(
     entry: PortraitEntry,
     thumbnail: File,
-    onOpen: (String) -> Unit,
     label: String = entry.date.dayOfMonth.toString(),
+    onOpen: () -> Unit,
 ) {
     Plate(
         matWidth = 5.dp,
         modifier = Modifier
             .fillMaxWidth()
             .accessibleClick(
-                onClick = { onOpen(entry.dayId) },
+                onClick = onOpen,
                 label = "${Fmt.longNoWeekday(entry.date)}, recorded",
             ),
     ) {

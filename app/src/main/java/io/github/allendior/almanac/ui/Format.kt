@@ -2,6 +2,7 @@ package io.github.allendior.almanac.ui
 
 import io.github.allendior.almanac.domain.PortraitEntry
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -30,6 +31,9 @@ object Fmt {
     fun iso(date: LocalDate): String = date.format(isoDate)
 
     fun clock(entry: PortraitEntry): String = entry.capturedAtLocal.format(clock)
+
+    /** Minutes since midnight, formatted the same way as every other time in the app. */
+    fun minuteOfDay(minute: Int): String = LocalTime.ofSecondOfDay(minute * 60L).format(clock)
 
     /**
      * The record line under an entry: the day, the wall-clock time it was taken, and

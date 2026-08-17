@@ -15,21 +15,23 @@ domain/*            Pure Kotlin, no Android types. Where the unit tests live.
 ```
 
 `domain/` holds the logic worth testing without a device: the day-id rules, the gap-line
-tiers, the "years and months apart" figure, and import validation. 29 unit tests cover
+tiers, the "years and months apart" figure, and import validation. 37 unit tests cover
 it.
 
 ## Storage
 
 ```
 files/originals/<yyyy-MM-dd>_<sha256[0..12]>.jpg
-files/thumbnails/<yyyy-MM-dd>.jpg
+files/thumbnails/<entryId>.jpg
 databases/almanac.db
 datastore/almanac_settings.preferences_pb
 ```
 
-**Filenames are built from the day and a prefix of the content hash, never from note
-text.** A note is private prose; it must not become a name that shows up in a file
-listing, a backup index, or over someone's shoulder.
+**Originals are still named from the day and a prefix of the content hash, never from
+note text.** A note is private prose; it must not become a name that shows up in a file
+listing, a backup index, or over someone's shoulder. **Thumbnails are named from the
+entry's id instead of the day** — since a day migration, day alone stopped being a safe
+filename basis for the thumbnail once more than one entry could share a day.
 
 **Originals versus thumbnails.** The original is the record: written once, never
 re-encoded. The thumbnail is a derived convenience; if it is lost or corrupt the archive
@@ -44,17 +46,31 @@ It is **not** a security control: it does not authenticate anything and it does 
 protect against someone who can write to app-private storage, because such a person can
 rewrite the hash too.
 
-## The day boundary
+## Identity: entry id versus day id
 
-The entry's identity is the ISO local date at the instant of capture, decided once on
-the device, and stored as the Room primary key. Two consequences, both deliberate:
+Each entry has two identifiers now, and they answer different questions:
 
-- "One portrait per day" is a property of the schema, not a rule the UI remembers to
-  enforce.
+- **`id`** (a UUID v4, generated once at save time) is the Room primary key and the
+  entry's real identity — the thing files are named from, the thing import dedupes by,
+  the thing every screen keys its state on.
+- **`day_id`** (the ISO local date at the instant of capture) is an indexed, non-unique
+  column. It answers "what day was this," not "which row is this."
+
+That split is the whole schema change behind letting a day hold more than one
+portrait: `day_id` used to be the primary key (`Migration 1→2` moved it off), and one
+row per day was a property of the schema itself rather than something the UI had to
+remember to enforce. It no longer is — `PortraitDao.insert()` always inserts, never
+upserts, and nothing on the save path looks for an existing row to replace.
+
+Two things about `day_id` did not change:
+
 - Travelling across timezones can never move, merge, or rewrite an existing entry,
-  because nothing recomputes the id. The UTC offset at capture is stored alongside, so a
-  portrait taken at 07:54 in Kolkata still reads 07:54 when you open it years later from
-  anywhere else.
+  because nothing recomputes the id it was captured under. The UTC offset at capture is
+  stored alongside, so a portrait taken at 07:54 in Kolkata still reads 07:54 when you
+  open it years later from anywhere else.
+- Every screen that groups by day (Calendar, Timeline, Compare) still groups by
+  `day_id` — it just now expects `groupBy`, not `associateBy`, since the result can be
+  a list of more than one.
 
 `today` is re-read in `onResume`, so midnight passing while the app sits open is picked
 up rather than cached.
@@ -69,10 +85,11 @@ shutter
   → Review screen: mood / number / note are optional and edit the draft only
   → Save:
       free-space check (refuse under 40 MB rather than half-write)
+      generate a new entry id (UUID v4)
       write originals/<name>.part, fsync via close, rename to final   [atomic commit]
-      derive thumbnail
-      upsert the Room row
-      only then delete a superseded file for the same day
+      derive thumbnail, named from the new entry id
+      insert the Room row — always an insert, never an upsert; nothing for
+      the same day is looked up, touched, or replaced
   → Discard: the bytes are dropped. Nothing was ever written.
 ```
 
@@ -104,20 +121,65 @@ photographs. Reversibility is the point.
   a file inside app-private storage;
 - each photograph's SHA-256 must match what the index claims, or the row is counted
   unreadable and skipped;
-- the day id is the stable identity, so **an existing day is never overwritten**. The
-  archive on this phone always wins, and importing the same file twice adds nothing the
-  second time;
+- the entry id is the stable identity now, not the day, so **an existing entry (by id)
+  is never overwritten** — and since a day can legitimately hold more than one entry,
+  import no longer treats "this day already has a row" as a reason to skip anything.
+  The archive on this phone always wins for any id it already holds, and importing the
+  same file twice adds nothing the second time;
 - the result is a visible report: added / already in archive / unreadable / rejected,
   with nothing silently dropped.
 
 The app holds no storage permission. It is handed exactly one URI per operation, uses
 it, and forgets it.
 
+## Theming: light and dark from one token set
+
+`Ink` (`ui/theme/Tokens.kt`) is a singleton object, not a `CompositionLocal` — that
+was the pre-existing shape, and every screen already read `Ink.text`, `Ink.bg`, and so
+on directly. Retrofitting dark mode without touching every one of those call sites
+meant making the theme-reactive tokens (`bg`, `surface`, `text`, `accent`, `accent600`,
+`accent700`, `scrim`) Compose-observable state instead of plain `val`s: still read the
+same way, but now swappable underneath.
+
+`AlmanacTheme` reads `isSystemInDarkTheme()` and calls `Ink.applyDarkMode(dark)`
+directly in its composable body, before `content()` composes — not from a
+`LaunchedEffect` or `SideEffect`, both of which run *after* the current composition
+pass, which would let the first frame render with the wrong palette when the app
+opens straight into dark mode. Setting the values synchronously, before the rest of
+the tree reads them, avoids that flash entirely.
+
+Three tokens are deliberately excluded: `darkBg`, `darkText`, and `guideGold` are the
+capture screen's always-inverted ground, a design decision that predates dark mode and
+is independent of the system setting — they stay plain constants. Everything else
+(`divider`, `textMuted`, `textFaint`, `textGhost`) is a `get()` computed from `text` at
+whatever alpha the handoff specified, so it never needs its own dark-mode branch and
+can never drift out of sync with a theme switch.
+
+## Reminder scheduling
+
+`ReminderScheduler` (`notifications/`) wraps a `PeriodicWorkRequest` with a 1-day
+interval and no constraints — no network, no charging, no foreground service. The
+initial delay is computed to the next occurrence of the saved time-of-day; changing
+the time or toggling the switch re-enqueues with `ExistingPeriodicWorkPolicy.UPDATE`,
+while the one-time bootstrap on cold start uses `KEEP`, so opening the app never
+disturbs an already-scheduled fire time.
+
+`ReminderWorker` is a `CoroutineWorker` built by a custom `ReminderWorkerFactory`,
+because it needs the same `PortraitRepository` and `SettingsStore` as everything else
+rather than a bare no-arg constructor — `AlmanacApp` implements
+`Configuration.Provider` to supply that factory, and the manifest removes
+WorkManager's default `androidx.startup` initializer accordingly (see
+`AndroidManifest.xml`'s `WorkManagerInitializer` `tools:node="remove"`). Each run
+checks settings, checks whether today already has an entry, checks the notification
+permission, and does nothing at all unless every one of those says to proceed — there
+is no catch-up for a day the worker didn't get to run on.
+
 ## State and navigation
 
 One `StateFlow<AlmanacUiState>`. Five bottom-nav destinations (Today, Calendar,
-Timeline, Compare, Archive) and four full-surface overlays (Capture, Review, Entry,
-Lock) that hide the navigation because each is a single task with a single way out.
+Timeline, Compare, Archive) and several full-surface overlays (Capture, Review, Entry,
+DayEntries, Lock, Welcome, Introduction, Tips) that hide the navigation because each is
+a single task with a single way out.
 
 Changing destination clears open dialogs, note editors and date pickers. System back is
 handled per overlay and returns to the list you came from.

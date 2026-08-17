@@ -1,6 +1,10 @@
 package io.github.allendior.almanac.ui
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -12,7 +16,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import io.github.allendior.almanac.data.PortraitRepository
 import io.github.allendior.almanac.domain.PortraitEntry
 import io.github.allendior.almanac.ui.components.BottomNav
@@ -24,14 +31,20 @@ import io.github.allendior.almanac.ui.screens.ArchiveScreen
 import io.github.allendior.almanac.ui.screens.CalendarScreen
 import io.github.allendior.almanac.ui.screens.CaptureScreen
 import io.github.allendior.almanac.ui.screens.CompareScreen
+import io.github.allendior.almanac.ui.screens.DayEntriesScreen
 import io.github.allendior.almanac.ui.screens.EntryScreen
+import io.github.allendior.almanac.ui.screens.IntroductionScreen
 import io.github.allendior.almanac.ui.screens.LockScreen
+import io.github.allendior.almanac.ui.screens.TipsScreen
 import io.github.allendior.almanac.ui.screens.WelcomeScreen
 import io.github.allendior.almanac.ui.screens.ReviewScreen
 import io.github.allendior.almanac.ui.screens.TimelineScreen
 import io.github.allendior.almanac.ui.screens.TodayScreen
+import java.time.LocalDate
 import io.github.allendior.almanac.ui.theme.Ink
 import java.io.File
+
+private const val SPONSORS_URL = "https://github.com/sponsors/Allendior"
 
 private val navItems = listOf(
     NavItem("Today", Lucide.Camera),
@@ -62,6 +75,27 @@ fun AlmanacRoot(
         ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? -> uri?.let(viewModel::import) }
 
+    // The one-time, automatic ask for notification permission — after onboarding, not
+    // during it, and never repeated: a later change of heart goes through the switch
+    // in Archive, which asks again as a direct response to that tap.
+    val context = LocalContext.current
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {}
+    LaunchedEffect(state.settings.hasSeenIntroduction, state.settings.hasRequestedNotificationPermission) {
+        val settings = state.settings
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            settings.hasSeenIntroduction &&
+            settings.notificationsEnabled &&
+            !settings.hasRequestedNotificationPermission &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            viewModel.markNotificationPermissionRequested()
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     Box(
         Modifier
             .fillMaxSize()
@@ -74,6 +108,13 @@ fun AlmanacRoot(
             is Overlay.Lock -> LockScreen(onUnlock = onRequestUnlock)
 
             is Overlay.Welcome -> WelcomeScreen(onBegin = viewModel::dismissWelcome)
+
+            is Overlay.Introduction -> IntroductionScreen(onDone = viewModel::dismissIntroduction)
+
+            is Overlay.Tips -> {
+                BackHandler { viewModel.closeOverlay() }
+                TipsScreen(onBack = viewModel::closeOverlay)
+            }
 
             is Overlay.Capture -> {
                 BackHandler { viewModel.closeOverlay() }
@@ -108,7 +149,7 @@ fun AlmanacRoot(
             }
 
             is Overlay.Entry -> {
-                val entry = state.entry(overlay.dayId)
+                val entry = state.entry(overlay.entryId)
                 if (entry == null) {
                     viewModel.closeOverlay()
                 } else {
@@ -124,6 +165,22 @@ fun AlmanacRoot(
                         onSaveNote = viewModel::saveNote,
                         onCompareWithToday = viewModel::compareWithToday,
                         onDelete = viewModel::confirmDelete,
+                    )
+                }
+            }
+
+            is Overlay.DayEntries -> {
+                val dayEntries = state.entriesForDay(overlay.dayId)
+                if (dayEntries.isEmpty()) {
+                    viewModel.closeOverlay()
+                } else {
+                    BackHandler { viewModel.closeOverlay() }
+                    DayEntriesScreen(
+                        date = LocalDate.parse(overlay.dayId),
+                        entries = dayEntries,
+                        thumbnailOf = thumbnailOf,
+                        onBack = viewModel::closeOverlay,
+                        onOpenEntry = viewModel::openEntry,
                     )
                 }
             }
@@ -154,6 +211,8 @@ private fun Destinations(
     onExport: () -> Unit,
     onImport: () -> Unit,
 ) {
+    val context = LocalContext.current
+
     if (state.destination != Destination.TODAY) {
         BackHandler { viewModel.navigate(Destination.TODAY) }
     }
@@ -167,6 +226,7 @@ private fun Destinations(
                     originalOf = originalOf,
                     onCapture = viewModel::openCapture,
                     onOpenEntry = viewModel::openEntry,
+                    onOpenDay = viewModel::openDay,
                     onNoteEditorOpen = viewModel::setNoteEditorOpen,
                     onSaveNote = viewModel::saveNote,
                 )
@@ -175,7 +235,7 @@ private fun Destinations(
                     state = state,
                     thumbnailOf = thumbnailOf,
                     onMonthChange = viewModel::showCalendarMonth,
-                    onOpenEntry = viewModel::openEntry,
+                    onOpenDay = viewModel::openDay,
                 )
 
                 Destination.TIMELINE -> TimelineScreen(
@@ -194,7 +254,7 @@ private fun Destinations(
                     thumbnailOf = thumbnailOf,
                     onTab = viewModel::setCompareTab,
                     onOpenPicker = viewModel::openComparePicker,
-                    onChooseDate = viewModel::chooseCompareDate,
+                    onChooseEntry = viewModel::chooseCompareEntry,
                     onOpenEntry = viewModel::openEntry,
                 )
 
@@ -206,6 +266,13 @@ private fun Destinations(
                     onCycleGuide = viewModel::cycleGuide,
                     onBackup = {
                         viewModel.showBackupNotBuilt()
+                    },
+                    onOpenTips = viewModel::openTips,
+                    onToggleNotifications = viewModel::setNotificationsEnabled,
+                    onSetNotificationMinute = viewModel::setNotificationMinuteOfDay,
+                    onOpenSponsors = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(SPONSORS_URL))
+                        context.startActivity(intent)
                     },
                 )
             }

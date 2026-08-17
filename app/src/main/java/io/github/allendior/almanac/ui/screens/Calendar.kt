@@ -1,5 +1,6 @@
 package io.github.allendior.almanac.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,12 +11,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -42,18 +45,19 @@ import java.time.YearMonth
  *
  * An empty square is empty. It carries no colour, no marker and no tooltip, because
  * the app keeps no record of what the owner intended to do on a day they did not
- * record. Only what happened is shown.
+ * record. Only what happened is shown. A day holding more than one portrait carries a
+ * small count instead — still just a fact, not a judgement.
  */
 @Composable
 fun CalendarScreen(
     state: AlmanacUiState,
     thumbnailOf: (PortraitEntry) -> File,
     onMonthChange: (YearMonth) -> Unit,
-    onOpenEntry: (String) -> Unit,
+    onOpenDay: (String) -> Unit,
 ) {
     val month = state.calendarMonth
-    val byDay = remember(state.entries) { state.entries.associateBy { it.dayId } }
-    val recordedThisMonth = state.entries.count { it.dayId.startsWith(monthPrefix(month)) }
+    val byDay = remember(state.entries) { state.entries.groupBy { it.dayId } }
+    val recordedThisMonth = byDay.keys.count { it.startsWith(monthPrefix(month)) }
 
     ScreenColumn(gap = 14.dp) {
         Kicker("Archive")
@@ -98,10 +102,10 @@ fun CalendarScreen(
                             } else {
                                 DayCell(
                                     date = date,
-                                    entry = byDay[date.toString()],
+                                    dayEntries = byDay[date.toString()].orEmpty(),
                                     isToday = date == state.today,
                                     thumbnailOf = thumbnailOf,
-                                    onOpenEntry = onOpenEntry,
+                                    onOpenDay = onOpenDay,
                                 )
                             }
                         }
@@ -121,15 +125,17 @@ fun CalendarScreen(
 @Composable
 private fun DayCell(
     date: LocalDate,
-    entry: PortraitEntry?,
+    dayEntries: List<PortraitEntry>,
     isToday: Boolean,
     thumbnailOf: (PortraitEntry) -> File,
-    onOpenEntry: (String) -> Unit,
+    onOpenDay: (String) -> Unit,
 ) {
-    val label = if (entry != null) {
-        "${Fmt.short(date)}, recorded"
-    } else {
-        "${Fmt.short(date)}, no portrait"
+    // Entries arrive newest-first, so the first is the one shown as this day's face.
+    val entry = dayEntries.firstOrNull()
+    val label = when {
+        dayEntries.size > 1 -> "${Fmt.short(date)}, ${dayEntries.size} portraits"
+        entry != null -> "${Fmt.short(date)}, recorded"
+        else -> "${Fmt.short(date)}, no portrait"
     }
     val border = when {
         entry != null -> Ink.divider
@@ -143,7 +149,7 @@ private fun DayCell(
             .border(1.dp, border)
             .then(
                 if (entry != null) {
-                    Modifier.accessibleClick(onClick = { onOpenEntry(entry.dayId) }, label = label)
+                    Modifier.accessibleClick(onClick = { onOpenDay(date.toString()) }, label = label)
                 } else {
                     Modifier.clearAndSetSemantics { contentDescription = label }
                 },
@@ -177,6 +183,22 @@ private fun DayCell(
             },
             modifier = Modifier.align(Alignment.Center),
         )
+        if (dayEntries.size > 1) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(2.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .padding(horizontal = 3.dp, vertical = 1.dp),
+            ) {
+                Text(
+                    dayEntries.size.toString(),
+                    style = Type.record(8f),
+                    color = Color.White.copy(alpha = 0.95f),
+                )
+            }
+        }
     }
 }
 

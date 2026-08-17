@@ -1,23 +1,31 @@
-Almanac is a private, offline-first record of one intentional self-portrait per day,
-meant to be looked back on years later.
+Almanac is a private, offline-first record of intentional self-portraits, meant to be
+looked back on years later.
 
 It has no accounts, no ads, no analytics, no cloud requirement, and no social
-features. It declares only the Camera permission — no internet access, no location,
-no broad storage access. Every photograph and every piece of metadata stays in the
-app's private storage on your device.
+features. It declares only the Camera, biometric-lock, and notification permissions —
+no internet access, no location, no broad storage access. Every photograph and every
+piece of metadata stays in the app's private storage on your device.
 
 Core ideas:
 
-* One portrait per local calendar day, taken with the in-app camera only. There is no
-  photo picker and no gallery import, so a portrait can be taken, never chosen from
-  elsewhere.
+* At least one portrait a day, and as many more as you actually take. Nothing is
+  replaced or discarded to make room for another; every portrait is kept,
+  individually. Taken with the in-app camera only — there is no photo picker and no
+  gallery import, so a portrait can be taken, never chosen from elsewhere.
 * The saved photograph is never altered. No filters, no beautifying, no cropping. An
   optional on-screen framing guide (a faint previous-portrait ghost, or a simple grid)
-  helps you line up the shot, but is never part of the saved file.
+  helps you line up the shot, but is never part of the saved file. An optional torch
+  is available on cameras that actually have one.
 * A missed day is never punished. There are no streaks, no completion percentages, and
-  no red marks on the calendar — only a quiet acknowledgement if it has been a while.
-* Browse your archive by calendar, by a scrolling timeline, or compare any two dates
-  side by side to see how much time has passed.
+  no red marks on the calendar. There is one optional daily reminder, on by default —
+  it fires at most once a day, only if today has no portrait yet, and is a single
+  switch away from off, permanently.
+* Follows your system's light or dark setting automatically.
+* Browse your archive by calendar (with a count badge on days with more than one
+  portrait), by a scrolling timeline, or compare any two dates — or any two portraits
+  from the same day — side by side to see how much time has passed.
+* A page of optional, unenforced tips for a portrait that compares well across years —
+  never shown unprompted, and nothing about it is checked or scored.
 * An optional biometric app lock, off by default.
 * Explicit export to a plain ZIP (your original photographs plus a readable JSON
   index) via the system file picker, and matching import with full validation, a

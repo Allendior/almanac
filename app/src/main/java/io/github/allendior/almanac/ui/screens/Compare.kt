@@ -43,7 +43,7 @@ fun CompareScreen(
     thumbnailOf: (PortraitEntry) -> File,
     onTab: (CompareTab) -> Unit,
     onOpenPicker: (ComparePane) -> Unit,
-    onChooseDate: (ComparePane, String) -> Unit,
+    onChooseEntry: (ComparePane, String) -> Unit,
     onOpenEntry: (String) -> Unit,
 ) {
     ScreenColumn(gap = 14.dp) {
@@ -71,7 +71,7 @@ fun CompareScreen(
         }
 
         when (state.compare.tab) {
-            CompareTab.TWO_DATES -> TwoDates(state, originalOf, thumbnailOf, onOpenPicker, onChooseDate)
+            CompareTab.TWO_DATES -> TwoDates(state, originalOf, thumbnailOf, onOpenPicker, onChooseEntry)
             CompareTab.BY_YEAR -> ByYear(state, thumbnailOf, onOpenEntry)
         }
     }
@@ -83,11 +83,11 @@ private fun TwoDates(
     originalOf: (PortraitEntry) -> File,
     thumbnailOf: (PortraitEntry) -> File,
     onOpenPicker: (ComparePane) -> Unit,
-    onChooseDate: (ComparePane, String) -> Unit,
+    onChooseEntry: (ComparePane, String) -> Unit,
 ) {
     // Defaults tell the story on their own: the first portrait against the latest one.
-    val left = state.entry(state.compare.leftDayId) ?: state.oldest
-    val right = state.entry(state.compare.rightDayId) ?: state.mostRecent
+    val left = state.entry(state.compare.leftEntryId) ?: state.oldest
+    val right = state.entry(state.compare.rightEntryId) ?: state.mostRecent
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s2)) {
         ComparePlate(left, ComparePane.LEFT, originalOf, thumbnailOf, onOpenPicker, Modifier.weight(1f))
@@ -111,7 +111,7 @@ private fun TwoDates(
             else "Choose a date for the right portrait",
         )
         Box(Modifier.height(Space.s2))
-        YearChips(state.entries) { dayId -> onChooseDate(picking, dayId) }
+        YearChips(state.entries) { entryId -> onChooseEntry(picking, entryId) }
     }
 }
 
@@ -128,7 +128,7 @@ private fun YearChips(entries: List<PortraitEntry>, onChoose: (String) -> Unit) 
             SelectChip(
                 label = "${entry.date.year} · ${Fmt.short(entry.date)}",
                 selected = false,
-                onClick = { onChoose(entry.dayId) },
+                onClick = { onChoose(entry.id) },
                 height = 44.dp,
             )
         }
@@ -197,7 +197,7 @@ private fun ByYear(
                         modifier = Modifier
                             .fillMaxWidth()
                             .accessibleClick(
-                                onClick = { onOpenEntry(entry.dayId) },
+                                onClick = { onOpenEntry(entry.id) },
                                 label = "${entry.date.year}, open ${Fmt.longNoWeekday(entry.date)}",
                             ),
                     ) {
@@ -233,4 +233,8 @@ private fun firstEntryPerYear(entries: List<PortraitEntry>): List<PortraitEntry>
     entries
         .groupBy { it.date.year }
         .toSortedMap()
-        .map { (_, yearEntries) -> yearEntries.minBy { it.dayId } }
+        .map { (_, yearEntries) ->
+            // Chronologically earliest — a day may hold more than one entry, so day
+            // alone does not break ties.
+            yearEntries.minWith(compareBy({ it.dayId }, { it.capturedAtEpochMs }))
+        }

@@ -67,9 +67,11 @@ class ArchiveExporter(
 }
 
 /**
- * Import is additive and idempotent. The day id is the stable identity, so importing
- * the same archive twice adds nothing the second time, and an existing day is never
- * overwritten by an incoming one — the archive on this phone always wins.
+ * Import is additive and idempotent. Each entry's own id is its stable identity, so
+ * importing the same archive twice adds nothing the second time, and an existing entry
+ * is never overwritten by an incoming one — the archive on this phone always wins. A
+ * day can hold more than one entry, so "this day already has a portrait" is no longer
+ * a reason to skip a row; only "this exact entry is already here" is.
  */
 class ArchiveImporter(
     private val context: Context,
@@ -120,7 +122,7 @@ class ArchiveImporter(
                     }
                     is EntryValidation.Result.Valid -> {
                         val entry = row.entry
-                        if (dao.findByDay(entry.dayId) != null) {
+                        if (dao.findById(entry.id) != null) {
                             duplicate++
                             return@forEach
                         }
@@ -144,7 +146,7 @@ class ArchiveImporter(
                             details += "${entry.dayId}: the photograph does not match its recorded hash"
                             return@forEach
                         }
-                        val stored = runCatching { photos.writeOriginal(entry.dayId, bytes) }.getOrNull()
+                        val stored = runCatching { photos.writeOriginal(entry.dayId, entry.id, bytes) }.getOrNull()
                         if (stored == null) {
                             unreadable++
                             details += "${entry.dayId}: could not be written to this phone"
@@ -154,7 +156,7 @@ class ArchiveImporter(
                             PortraitEntryEntity.fromDomain(entry.copy(fileName = stored.fileName)),
                         )
                         if (inserted == -1L) {
-                            photos.delete(stored.fileName, entry.dayId)
+                            photos.delete(stored.fileName, entry.id)
                             duplicate++
                         } else {
                             added++

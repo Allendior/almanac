@@ -1,5 +1,6 @@
 package io.github.allendior.almanac.ui
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -16,6 +17,7 @@ import io.github.allendior.almanac.domain.CameraFacing
 import io.github.allendior.almanac.domain.DayId
 import io.github.allendior.almanac.domain.Mood
 import io.github.allendior.almanac.domain.PortraitEntry
+import io.github.allendior.almanac.notifications.ReminderScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +31,9 @@ class AlmanacViewModel(
     private val settingsStore: SettingsStore,
     private val exporter: ArchiveExporter,
     private val importer: ArchiveImporter,
+    /** Application context only — safe to hold for the ViewModel's lifetime, and
+     * needed solely to hand WorkManager to [ReminderScheduler]. */
+    private val appContext: Context,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AlmanacUiState())
@@ -42,6 +47,15 @@ class AlmanacViewModel(
      * enabling the lock from Archive) would incorrectly re-trigger it mid-session.
      */
     private var coldStartHandled = false
+
+    /**
+     * True once this process has (re)armed the reminder for whatever the saved
+     * settings already say. Guarded the same way as [coldStartHandled] so a later
+     * settings change doesn't re-run this — explicit changes go through
+     * [setNotificationsEnabled] / [setNotificationMinuteOfDay] instead, which use
+     * UPDATE rather than KEEP so they actually take effect immediately.
+     */
+    private var reminderBootstrapped = false
 
     init {
         viewModelScope.launch {
@@ -57,6 +71,12 @@ class AlmanacViewModel(
                         next
                     }
                 }
+                if (!reminderBootstrapped) {
+                    reminderBootstrapped = true
+                    if (settings.notificationsEnabled) {
+                        ReminderScheduler.schedule(appContext, settings.notificationMinuteOfDay, replaceExisting = false)
+                    }
+                }
             }
         }
         viewModelScope.launch {
@@ -65,11 +85,8 @@ class AlmanacViewModel(
         }
     }
 
-    private fun coldStartOverlay(settings: Settings): Overlay? = when {
-        settings.biometricLock -> Overlay.Lock
-        !settings.hasSeenWelcome -> Overlay.Welcome
-        else -> null
-    }
+    private fun coldStartOverlay(settings: Settings): Overlay? =
+        if (settings.biometricLock) Overlay.Lock else postLockOverlay(settings)
 
     /** Called on every resume: the calendar day can change while the app is open. */
     fun refreshToday() {
@@ -79,13 +96,27 @@ class AlmanacViewModel(
         }
     }
 
-    /** After a successful unlock (or when no lock was required), the welcome screen is next if unseen. */
-    fun unlock() = _state.update {
-        it.copy(overlay = if (!it.settings.hasSeenWelcome) Overlay.Welcome else null)
+    /**
+     * After a successful unlock (or when no lock was required): Welcome first if
+     * unseen, else the Introduction walkthrough first if unseen, else straight in.
+     */
+    fun unlock() = _state.update { it.copy(overlay = postLockOverlay(it.settings)) }
+
+    private fun postLockOverlay(settings: Settings): Overlay? = when {
+        !settings.hasSeenWelcome -> Overlay.Welcome
+        !settings.hasSeenIntroduction -> Overlay.Introduction
+        else -> null
     }
 
     fun dismissWelcome() {
         viewModelScope.launch { settingsStore.setHasSeenWelcome(true) }
+        _state.update {
+            it.copy(overlay = if (!it.settings.hasSeenIntroduction) Overlay.Introduction else null)
+        }
+    }
+
+    fun dismissIntroduction() {
+        viewModelScope.launch { settingsStore.setHasSeenIntroduction(true) }
         _state.update { it.copy(overlay = null) }
     }
 
@@ -102,13 +133,26 @@ class AlmanacViewModel(
         )
     }
 
-    fun openEntry(dayId: String) = _state.update {
-        it.copy(overlay = Overlay.Entry(dayId), dialog = null, noteEditorOpen = false)
+    fun openEntry(entryId: String) = _state.update {
+        it.copy(overlay = Overlay.Entry(entryId), dialog = null, noteEditorOpen = false)
+    }
+
+    /** From Calendar: a day with exactly one entry opens it directly; more than one opens a picker. */
+    fun openDay(dayId: String) = _state.update {
+        val dayEntries = it.entriesForDay(dayId)
+        val overlay = when {
+            dayEntries.size == 1 -> Overlay.Entry(dayEntries.first().id)
+            dayEntries.size > 1 -> Overlay.DayEntries(dayId)
+            else -> return@update it
+        }
+        it.copy(overlay = overlay, dialog = null, noteEditorOpen = false)
     }
 
     fun closeOverlay() = _state.update { it.copy(overlay = null, noteEditorOpen = false) }
 
     fun openCapture() = _state.update { it.copy(overlay = Overlay.Capture, dialog = null) }
+
+    fun openTips() = _state.update { it.copy(overlay = Overlay.Tips, dialog = null) }
 
     fun dismissDialog() = _state.update { it.copy(dialog = null) }
 
@@ -217,9 +261,9 @@ class AlmanacViewModel(
 
     // ---- entries ----------------------------------------------------------
 
-    fun saveNote(dayId: String, note: String) {
+    fun saveNote(entryId: String, note: String) {
         viewModelScope.launch {
-            repository.updateNote(dayId, note)
+            repository.updateNote(entryId, note)
             _state.update { it.copy(noteEditorOpen = false) }
         }
     }
@@ -246,11 +290,11 @@ class AlmanacViewModel(
         it.copy(compare = it.compare.copy(picking = if (it.compare.picking == pane) null else pane))
     }
 
-    fun chooseCompareDate(pane: ComparePane, dayId: String) = _state.update {
+    fun chooseCompareEntry(pane: ComparePane, entryId: String) = _state.update {
         it.copy(
             compare = when (pane) {
-                ComparePane.LEFT -> it.compare.copy(leftDayId = dayId, picking = null)
-                ComparePane.RIGHT -> it.compare.copy(rightDayId = dayId, picking = null)
+                ComparePane.LEFT -> it.compare.copy(leftEntryId = entryId, picking = null)
+                ComparePane.RIGHT -> it.compare.copy(rightEntryId = entryId, picking = null)
             },
         )
     }
@@ -262,8 +306,8 @@ class AlmanacViewModel(
             overlay = null,
             compare = CompareState(
                 tab = CompareTab.TWO_DATES,
-                leftDayId = entry.dayId,
-                rightDayId = it.mostRecent?.dayId,
+                leftEntryId = entry.id,
+                rightEntryId = it.mostRecent?.id,
             ),
         )
     }
@@ -280,6 +324,27 @@ class AlmanacViewModel(
 
     fun setBiometricLock(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setBiometricLock(enabled) }
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setNotificationsEnabled(enabled) }
+        if (enabled) {
+            ReminderScheduler.schedule(appContext, _state.value.settings.notificationMinuteOfDay, replaceExisting = true)
+        } else {
+            ReminderScheduler.cancel(appContext)
+        }
+    }
+
+    fun setNotificationMinuteOfDay(minute: Int) {
+        viewModelScope.launch { settingsStore.setNotificationMinuteOfDay(minute) }
+        if (_state.value.settings.notificationsEnabled) {
+            ReminderScheduler.schedule(appContext, minute, replaceExisting = true)
+        }
+    }
+
+    /** Called once, right after the one-time automatic permission prompt is shown. */
+    fun markNotificationPermissionRequested() {
+        viewModelScope.launch { settingsStore.setNotificationPermissionRequested(true) }
     }
 
     // ---- export and import ------------------------------------------------
@@ -339,7 +404,7 @@ class AlmanacViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             val c = app.container
-            return AlmanacViewModel(c.repository, c.settings, c.exporter, c.importer) as T
+            return AlmanacViewModel(c.repository, c.settings, c.exporter, c.importer, app.applicationContext) as T
         }
     }
 }

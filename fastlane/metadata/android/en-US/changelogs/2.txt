@@ -1,0 +1,7 @@
+* Multiple portraits a day are now truly kept, not just replaced
+* Dark mode, following the system setting
+* An optional torch on cameras that have one
+* A one-time walkthrough of where things live in the app
+* A page of optional tips for a more comparable portrait over time
+* An optional daily reminder, on by default, off in one tap
+* A GitHub Sponsors link in Archive, for anyone who wants to support the app
